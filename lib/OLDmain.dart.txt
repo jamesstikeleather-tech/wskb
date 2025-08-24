@@ -1,0 +1,442 @@
+// lib/main.dart — FULL FILE (WSKB emulator demo)
+// - Connects to Auth + Firestore emulators
+// - Tabs: Brands, My Diary, Presets
+// - FAB: Add Brand (Admin only) on Brands; New Diary Entry on My Diary
+// - Includes TabController listener so FAB updates when switching tabs.
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
+
+// Host for emulators. Web uses 127.0.0.1; Android emulator uses 10.0.2.2.
+String get _emulatorHost {
+  if (kIsWeb) return '127.0.0.1';
+  if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
+  return '127.0.0.1';
+}
+
+Future<void> _connectEmulators() async {
+  FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
+  await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _connectEmulators();
+  runApp(const WSKBApp());
+}
+
+class WSKBApp extends StatelessWidget {
+  const WSKBApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'WSKB (Emulator)',
+      theme: ThemeData(useMaterial3: true),
+      home: const Gate(),
+    );
+  }
+}
+
+class Gate extends StatelessWidget {
+  const Gate({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return (snap.data == null) ? const SignInPage() : const HomePage();
+      },
+    );
+  }
+}
+
+class SignInPage extends StatefulWidget {
+  const SignInPage({super.key});
+  @override
+  State<SignInPage> createState() => _SignInPageState();
+}
+class _SignInPageState extends State<SignInPage> {
+  final emailCtrl = TextEditingController(text: 'admin@example.com');
+  final passCtrl  = TextEditingController(text: 'secret123');
+  String? _error; bool _busy = false;
+
+  Future<void> _signIn() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailCtrl.text.trim(), password: passCtrl.text.trim());
+    } on FirebaseAuthException catch (e) { setState(() => _error = e.message); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Sign in (Auth Emulator)')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
+              const SizedBox(height: 8),
+              TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password'), obscureText: true),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _busy ? null : _signIn,
+                child: _busy ? const SizedBox(height:16,width:16,child: CircularProgressIndicator(strokeWidth:2))
+                              : const Text('Sign in to Emulator'),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  late final TabController _tab;
+  bool _isAdmin = false;
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 3, vsync: this); // Brands, Diary, Presets
+    _refreshClaims();
+
+    // IMPORTANT: Rebuild when tab changes so the FAB updates
+    _tab.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _refreshClaims() async {
+    final u = FirebaseAuth.instance.currentUser;
+    if (u == null) return;
+    final tok = await u.getIdTokenResult(true); // refresh to pull custom claims
+    setState(() => _isAdmin = (tok.claims?['admin'] == true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('WSKB (Emulator)'),
+        bottom: TabBar(
+         controller: _tab,
+         // 👇 ensure FAB/menu updates immediately when the tab changes
+         onTap: (_) => setState(() {}),
+         tabs: const [
+           Tab(text: 'Brands'),
+           Tab(text: 'My Diary'),
+           Tab(text: 'Presets'),
+         ],
+        ),
+
+        actions: [
+  Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text(_isAdmin ? 'Admin' : 'User',
+          style: TextStyle(color: _isAdmin ? Colors.green : Colors.grey)),
+    ),
+  ),
+
+  // 👇 NEW: actions menu (always visible)
+  PopupMenuButton<String>(
+    tooltip: 'Actions',
+    onSelected: (value) async {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      if (value == 'add_brand') {
+        await _addBrand();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Brand added (admin write)')),
+          );
+        }
+      } else if (value == 'add_diary') {
+        await _addDiaryEntry(uid);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Diary entry added')),
+          );
+        }
+      }
+    },
+    itemBuilder: (context) => <PopupMenuEntry<String>>[
+      if (_isAdmin)
+        const PopupMenuItem<String>(
+          value: 'add_brand',
+          child: ListTile(
+            leading: Icon(Icons.factory),
+            title: Text('Add Brand (catalog)'),
+          ),
+        ),
+      const PopupMenuItem<String>(
+        value: 'add_diary',
+        child: ListTile(
+          leading: Icon(Icons.edit),
+          title: Text('New Diary Entry'),
+        ),
+      ),
+    ],
+  ),
+
+  IconButton(
+    icon: const Icon(Icons.logout),
+    onPressed: () async => FirebaseAuth.instance.signOut(),
+  ),
+],
+
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: [
+          const _BrandsTab(),
+          _DiaryTab(uid: uid),
+          _PresetsTab(uid: uid),
+        ],
+      ),
+      floatingActionButton: _actionFab(uid),
+
+    );
+  }
+
+    Widget _actionFab(String uid) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.add),
+      tooltip: 'Actions',
+      onSelected: (value) async {
+        if (value == 'add_brand') {
+          await _addBrand();
+        } else if (value == 'add_diary') {
+          await _addDiaryEntry(uid);
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        if (_isAdmin)
+          const PopupMenuItem<String>(
+            value: 'add_brand',
+            child: ListTile(
+              leading: Icon(Icons.factory),
+              title: Text('Add Brand (catalog)'),
+            ),
+          ),
+        const PopupMenuItem<String>(
+          value: 'add_diary',
+          child: ListTile(
+            leading: Icon(Icons.edit),
+            title: Text('New Diary Entry'),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Future<void> _addBrand() async {
+  try {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    await FirebaseFirestore.instance.collection('brands').add({
+      'displayName': 'New Brand $ts',
+      'countryOfOriginCode': 'US',
+      'catalogVersion': 1,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Brand added (admin write)')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Add Brand failed: $e')),
+      );
+    }
+  }
+}
+
+Future<void> _addDiaryEntry(String uid) async {
+  try {
+    final db = FirebaseFirestore.instance;
+    String? presetCode;
+    Map<String, dynamic>? snapshot;
+
+    final sat = await db.collection('users').doc(uid).collection('presets').doc('SAT_SHAVE').get();
+    if (sat.exists) {
+      presetCode = 'SAT_SHAVE';
+      snapshot = (sat.data()?['snapshot'] as Map?)?.cast<String, dynamic>();
+    } else {
+      final first = await db.collection('users').doc(uid).collection('presets').limit(1).get();
+      if (first.docs.isNotEmpty) {
+        presetCode = first.docs.first.id;
+        snapshot = (first.docs.first.data()['snapshot'] as Map?)?.cast<String, dynamic>();
+      }
+    }
+
+    final id = DateTime.now().toIso8601String();
+    await db.collection('users').doc(uid).collection('diary').doc(id).set({
+      if (presetCode != null) 'presetCode': presetCode,
+      if (snapshot != null) 'snapshot': snapshot,
+      'passes': 2,
+      'irritation': 'None',
+      'mishaps': 0,
+      'sotd': true,
+      'sotdName': 'Quick Test Entry',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Diary entry added')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('New Diary Entry failed: $e')),
+      );
+    }
+  }
+}
+
+
+class _BrandsTab extends StatelessWidget {
+  const _BrandsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final q = FirebaseFirestore.instance.collection('brands').orderBy('displayName');
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q.snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red)));
+        }
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        if (docs.isEmpty) return const Center(child: Text('No brands yet'));
+        return ListView.separated(
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final d = docs[i].data();
+            return ListTile(
+              title: Text(d['displayName'] ?? '(no name)'),
+              subtitle: Text('Country: ${d['countryOfOriginCode'] ?? ''}  • v${d['catalogVersion'] ?? '-'}'),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _DiaryTab extends StatelessWidget {
+  final String uid;
+  const _DiaryTab({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .collection('diary')
+        .orderBy('sotd', descending: true);
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q.snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red)));
+        }
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        if (docs.isEmpty) return const Center(child: Text('No diary entries yet'));
+        return ListView.separated(
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final d = docs[i].data();
+            final title = d['sotdName'] ?? d['presetCode'] ?? docs[i].id;
+            final proj = d['projection'] ?? '';
+            final lon = d['perceivedLongevity_h']?.toString() ?? '';
+            final ref = d['fragranceRef'];
+            final refPath = (ref is DocumentReference) ? ref.path : (ref?.toString() ?? '');
+            return ListTile(
+              title: Text(title),
+              subtitle: Text('Projection: $proj  •  Longevity (h): $lon'
+                  '${refPath.isNotEmpty ? '  •  fragranceRef: $refPath' : ''}'),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _PresetsTab extends StatelessWidget {
+  final String uid;
+  const _PresetsTab({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .collection('presets')
+        .orderBy(FieldPath.documentId);
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q.snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red)));
+        }
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        if (docs.isEmpty) return const Center(child: Text('No presets yet'));
+        return ListView.separated(
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final id = docs[i].id;
+            final d = docs[i].data();
+            final alias = d['aliasName'] ?? id;
+            final fam = d['familyCode'] ?? '';
+            final cfg = d['configCode'] ?? '';
+            final hdl = d['handleCode'] ?? '';
+            return ListTile(
+              title: Text(alias),
+              subtitle: Text('Family: $fam • Config: $cfg • Handle: $hdl'),
+            );
+          },
+        );
+      },
+    );
+  }
+}
