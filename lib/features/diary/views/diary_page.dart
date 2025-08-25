@@ -74,6 +74,37 @@ class _DiaryPageState extends State<DiaryPage> {
     }
   }
 
+Future<bool> _confirmDelete(String label) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete entry?'),
+      content: Text('Are you sure you want to delete $label?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+void _showUndoSnackBar({
+  required String message,
+  required VoidCallback onUndo,
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
+      duration: const Duration(seconds: 5),
+    ),
+  );
+}
+
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<DiaryTransaction>>(
@@ -103,9 +134,24 @@ class _DiaryPageState extends State<DiaryPage> {
                               subtitle: Text('$when${it.notes != null ? "\n${it.notes}" : ""}'),
                               isThreeLine: it.notes != null,
                               trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => repo.remove(it.id),
-                              ),
+  icon: const Icon(Icons.delete_outline),
+  onPressed: () async {
+    final when = it.occurredAt.toLocal().toString();
+    final ok = await _confirmDelete('the entry from $when');
+    if (!ok) return;
+
+    final deleted = it;
+    await repo.remove(it.id);
+
+    _showUndoSnackBar(
+      message: 'Deleted entry from $when.',
+      onUndo: () {
+        repo.add(deleted);
+      },
+    );
+  },
+),
+
                             );
                           },
                         ),

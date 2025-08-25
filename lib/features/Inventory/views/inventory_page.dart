@@ -27,6 +27,8 @@ class _InventoryPageState extends State<InventoryPage> {
   late final PersonalMemoRepository memos;
   final String currentUserId = 'local'; // swap to real auth uid later
 
+
+
   @override
 void initState() {
   super.initState();
@@ -138,6 +140,37 @@ void initState() {
     }
   }
 
+Future<bool> _confirmDelete(String label) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete item?'),
+      content: Text('Are you sure you want to delete $label?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+void _showUndoSnackBar({
+  required String message,
+  required VoidCallback onUndo,
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
+      duration: const Duration(seconds: 5),
+    ),
+  );
+}
+
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<InventoryItem>>(
@@ -169,9 +202,25 @@ void initState() {
                                 '${it.isPersonal ? "  (Personal)" : ""}',
                               ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => repo.remove(it.id),
-                              ),
+  icon: const Icon(Icons.delete_outline),
+  onPressed: () async {
+    final ok = await _confirmDelete('“${it.name}” from Inventory');
+    if (!ok) return;
+
+    // Keep a copy for undo.
+    final deleted = it;
+    await repo.remove(it.id);
+
+    _showUndoSnackBar(
+      message: 'Deleted “${deleted.name}”.',
+      onUndo: () {
+        // Re-add the exact same item (same id).
+        repo.add(deleted);
+      },
+    );
+  },
+),
+
                             );
                           },
                         ),
