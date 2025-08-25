@@ -15,10 +15,20 @@ class FirestoreRazorRepository implements RazorRepository {
 
     return base.snapshots().map((qs) {
       return qs.docs.map((d) {
-        final data = d.data(); // no cast needed
+        final data = d.data();
         final withId = {...data, 'id': data['id'] ?? d.id};
         return Razor.fromJson(withId);
       }).toList();
+    });
+  }
+
+  @override
+  Stream<Razor?> watchOne(String id) {
+    return _col.doc(id).snapshots().map((ds) {
+      if (!ds.exists) return null;
+      final data = ds.data()!;
+      final withId = {...data, 'id': data['id'] ?? ds.id};
+      return Razor.fromJson(withId);
     });
   }
 

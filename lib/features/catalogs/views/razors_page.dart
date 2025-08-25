@@ -1,6 +1,5 @@
-// lib/features/catalogs/views/razors_page.dart
 import 'package:flutter/material.dart';
-
+import 'package:go_router/go_router.dart';
 
 import '../../../app/env.dart';
 import '../models/razor.dart';
@@ -33,19 +32,21 @@ class _RazorsPageState extends State<RazorsPage> {
         actions: [
           PopupMenuButton<RazorType?>(
             tooltip: 'Filter',
+            initialValue: filter,
             onSelected: (v) => setState(() => filter = v),
-            itemBuilder: (_) => <PopupMenuEntry<RazorType?>>[
-              const PopupMenuItem(value: null, child: Text('All')),
-              ...RazorType.values.map((t) => PopupMenuItem(value: t, child: Text(t.name))),
+            itemBuilder: (context) => <PopupMenuEntry<RazorType?>>[
+              const PopupMenuItem<RazorType?>(value: null, child: Text('All')),
+              ...RazorType.values.map(
+                (t) => PopupMenuItem<RazorType?>(value: t, child: Text(t.name)),
+              ),
             ],
-            icon: const Icon(Icons.filter_list),
           ),
         ],
       ),
       body: StreamBuilder<List<Razor>>(
         stream: repo.watchAll(typeFilter: filter),
-        builder: (context, snap) {
-          final items = snap.data ?? const <Razor>[];
+        builder: (context, snapshot) {
+          final items = snapshot.data ?? const <Razor>[];
           if (items.isEmpty) {
             return const Center(child: Text('No razors'));
           }
@@ -53,8 +54,8 @@ class _RazorsPageState extends State<RazorsPage> {
             padding: const EdgeInsets.all(12),
             itemCount: items.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final r = items[i];
+            itemBuilder: (context, index) {
+              final r = items[index];
               return ListTile(
                 leading: const Icon(Icons.safety_divider),
                 title: Text(r.name),
@@ -76,12 +77,7 @@ class _RazorsPageState extends State<RazorsPage> {
                       ),
                   ],
                 ),
-                onTap: () {
-                  // later: push to Razor detail page
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Razor: ${r.name}')),
-                  );
-                },
+                onTap: () => context.push('/razors/${r.id}'),
               );
             },
           );

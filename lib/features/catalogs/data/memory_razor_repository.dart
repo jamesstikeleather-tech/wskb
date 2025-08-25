@@ -10,6 +10,7 @@ class MemoryRazorRepository implements RazorRepository {
       id: 'r_rockwell_6s',
       name: 'Rockwell 6S',
       razorType: RazorType.safety,
+      brandId: 'brand_rockwell',
       aliases: ['6S'],
       specs: {'guard': 'SB', 'pieces': 3, 'adjustable': true, 'plates': 'R1–R6'},
     ),
@@ -17,6 +18,7 @@ class MemoryRazorRepository implements RazorRepository {
       id: 'r_dovo_bismarck',
       name: 'Dovo Bismarck',
       razorType: RazorType.straight,
+      brandId: 'brand_dovo',
       aliases: ['Bismarck'],
       specs: {'grind': 'full_hollow', 'width_in': '6/8', 'point': 'round', 'steel': 'carbon'},
     ),
@@ -24,6 +26,7 @@ class MemoryRazorRepository implements RazorRepository {
       id: 'r_feather_ac_ss',
       name: 'Feather Artist Club SS',
       razorType: RazorType.shavette,
+      brandId: 'brand_feather',
       aliases: ['Feather SS', 'AC SS'],
       specs: {'bladeFormat': 'AC', 'clamp': 'spring'},
     ),
@@ -31,12 +34,19 @@ class MemoryRazorRepository implements RazorRepository {
       id: 'r_iwasaki_kamisori',
       name: 'Iwasaki Kamisori',
       razorType: RazorType.kamisori,
+      brandId: 'brand_iwasaki',
       aliases: ['Iwasaki'],
       specs: {'steel': 'Swedish steel', 'handedness': 'right'},
     ),
   ];
 
   void _emit() => _controller.add(List.unmodifiable(_items));
+  Razor? _findById(String id) {
+    for (final r in _items) {
+      if (r.id == id) return r;
+    }
+    return null;
+  }
 
   @override
   Stream<List<Razor>> watchAll({RazorType? typeFilter}) async* {
@@ -51,6 +61,14 @@ class MemoryRazorRepository implements RazorRepository {
       if (typeFilter == null) return list;
       return list.where((r) => r.razorType == typeFilter).toList(growable: false);
     });
+  }
+
+  @override
+  Stream<Razor?> watchOne(String id) async* {
+    // seed
+    yield _findById(id);
+    // then update whenever the list changes
+    yield* _controller.stream.map((_) => _findById(id));
   }
 
   @override
