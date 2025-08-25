@@ -31,6 +31,7 @@ class _RazorsPageState extends State<RazorsPage> {
       appBar: AppBar(
         title: const Text('Razors'),
         actions: [
+          // Filter menu
           PopupMenuButton<RazorType?>(
             tooltip: 'Filter',
             initialValue: filter,
@@ -41,6 +42,13 @@ class _RazorsPageState extends State<RazorsPage> {
                 (t) => PopupMenuItem<RazorType?>(value: t, child: Text(prettyRazorType(t))),
               ),
             ],
+            icon: const Icon(Icons.filter_list),
+          ),
+          // Import CSV button
+          IconButton(
+            tooltip: 'Import CSV',
+            icon: const Icon(Icons.file_upload),
+            onPressed: () => context.push('/razors/import'),
           ),
         ],
       ),
