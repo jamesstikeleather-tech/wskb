@@ -1,11 +1,11 @@
 // lib/features/catalogs/views/catalogs_page.dart
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart'; // <-- needed for context.go
+import 'package:go_router/go_router.dart';
+
 import '../../../data/brand.dart';
 import '../../../data/brand_repository.dart';
 import '../data/blade_repository.dart';
 import '../models/blade.dart';
-
 
 class CatalogsPage extends StatelessWidget {
   const CatalogsPage({super.key});
@@ -15,7 +15,6 @@ class CatalogsPage extends StatelessWidget {
     final List<Brand> brands = BrandRepository().all();
     final List<Blade> blades = BladeRepository().all();
 
-
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
@@ -23,7 +22,18 @@ class CatalogsPage extends StatelessWidget {
           const Text('Catalogs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
 
-          // ---- Brands (existing) ----
+          // Razors button
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: () => context.push('/razors'),
+              icon: const Icon(Icons.safety_divider),
+              label: const Text('View Razors'),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ---- Brands ----
           const Text('Brands'),
           const SizedBox(height: 8),
           Card(
@@ -46,7 +56,7 @@ class CatalogsPage extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // ---- Blades with aliases (new demo) ----
+          // ---- Blades (aliases demo) ----
           const Text('Blades (aliases demo)'),
           const SizedBox(height: 8),
           Card(
@@ -56,9 +66,9 @@ class CatalogsPage extends StatelessWidget {
               itemCount: blades.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
-                final Blade blade = blades[i];
+                final blade = blades[i];
                 return ListTile(
-                  leading: const Icon(Icons.cut), // close enough for demo
+                  leading: const Icon(Icons.cut),
                   title: Text(blade.name),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
