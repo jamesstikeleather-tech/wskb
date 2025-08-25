@@ -6,6 +6,7 @@ import '../models/razor.dart';
 import '../data/razor_repository.dart';
 import '../data/memory_razor_repository.dart';
 import '../data/firestore_razor_repository.dart';
+import '../utils/razor_format.dart';
 
 class RazorsPage extends StatefulWidget {
   const RazorsPage({super.key});
@@ -37,7 +38,7 @@ class _RazorsPageState extends State<RazorsPage> {
             itemBuilder: (context) => <PopupMenuEntry<RazorType?>>[
               const PopupMenuItem<RazorType?>(value: null, child: Text('All')),
               ...RazorType.values.map(
-                (t) => PopupMenuItem<RazorType?>(value: t, child: Text(t.name)),
+                (t) => PopupMenuItem<RazorType?>(value: t, child: Text(prettyRazorType(t))),
               ),
             ],
           ),
@@ -64,7 +65,10 @@ class _RazorsPageState extends State<RazorsPage> {
                   children: [
                     Wrap(
                       spacing: 6,
-                      children: [Chip(label: Text(r.razorType.name))],
+                      children: [
+                        Chip(label: Text(prettyRazorType(r.razorType))),
+                        if (r.form != null) Chip(label: Text(prettyRazorForm(r.form!))),
+                      ],
                     ),
                     if (r.aliases.isNotEmpty) const SizedBox(height: 4),
                     if (r.aliases.isNotEmpty)
@@ -72,7 +76,12 @@ class _RazorsPageState extends State<RazorsPage> {
                         spacing: 6,
                         runSpacing: -8,
                         children: r.aliases
-                            .map((a) => Chip(label: Text(a), visualDensity: VisualDensity.compact))
+                            .map(
+                              (a) => Chip(
+                                label: Text(a),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            )
                             .toList(),
                       ),
                   ],
@@ -89,12 +98,14 @@ class _RazorsPageState extends State<RazorsPage> {
               heroTag: 'fab-razors',
               onPressed: () async {
                 final id = DateTime.now().microsecondsSinceEpoch.toString();
-                await repo.add(Razor(
-                  id: id,
-                  name: 'Sample Razor $id',
-                  razorType: RazorType.other,
-                  aliases: const [],
-                ));
+                await repo.add(
+                  Razor(
+                    id: id,
+                    name: 'Sample Razor $id',
+                    razorType: RazorType.other,
+                    aliases: const [],
+                  ),
+                );
               },
               child: const Icon(Icons.add),
             ),

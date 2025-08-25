@@ -6,6 +6,7 @@ import '../models/razor.dart';
 import '../data/razor_repository.dart';
 import '../data/memory_razor_repository.dart';
 import '../data/firestore_razor_repository.dart';
+import '../utils/razor_format.dart';
 
 class RazorDetailPage extends StatefulWidget {
   final String id;
@@ -47,7 +48,8 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
               Wrap(
                 spacing: 8,
                 children: [
-                  Chip(label: Text(r.razorType.name)),
+                  Chip(label: Text(prettyRazorType(r.razorType))),
+                  if (r.form != null) Chip(label: Text(prettyRazorForm(r.form!))),
                   if (r.brandId != null)
                     ActionChip(
                       label: const Text('View Brand'),
@@ -55,7 +57,17 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
                     ),
                 ],
               ),
-
+              if ((r.specs['barTypes'] is List) &&
+                  (r.specs['barTypes'] as List).isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: (r.specs['barTypes'] as List)
+                      .map((t) => Chip(label: Text(prettyBarType(t.toString()))))
+                      .cast<Widget>()
+                      .toList(),
+                ),
+              ],
               if (r.aliases.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text('Also known as', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -68,12 +80,19 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
                       .toList(),
                 ),
               ],
-
               if (r.specs.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text('Specs', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 _SpecsTable(specs: r.specs),
+              ],
+              if (r.specs['plates'] is List) ...[
+                const SizedBox(height: 16),
+                const Text('Plates', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                _PlatesTable(
+                  plates: (r.specs['plates'] as List).cast<Map<String, dynamic>>(),
+                ),
               ],
             ],
           );
@@ -89,7 +108,11 @@ class _SpecsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = specs.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final entries = specs.entries
+        .where((e) => e.key != 'plates' && e.key != 'barTypes') // shown elsewhere
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -112,6 +135,65 @@ class _SpecsTable extends StatelessWidget {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlatesTable extends StatelessWidget {
+  final List<Map<String, dynamic>> plates;
+  const _PlatesTable({required this.plates});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = plates.map((p) {
+      final name = p['name'] ?? '';
+      final barTypes = (p['barTypes'] as List?)?.cast<String>();
+      final barLabel = (barTypes != null && barTypes.isNotEmpty)
+          ? barTypes.map(prettyBarType).join(' + ')
+          : (p['guard'] ?? ''); // legacy fallback
+      final gap = p['gap_mm'];
+      final exposure = p['exposure'] ?? '';
+      final gapStr = (gap is num) ? '${gap.toStringAsFixed(2)} mm' : (gap?.toString() ?? '');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 64,
+              child: Text('$name', style: const TextStyle(fontWeight: FontWeight.w500)),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(width: 120, child: Text(barLabel)),
+            const SizedBox(width: 12),
+            SizedBox(width: 80, child: Text(gapStr)),
+            const SizedBox(width: 12),
+            Expanded(child: Text('$exposure')),
+          ],
+        ),
+      );
+    }).toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: const [
+                SizedBox(width: 64, child: Text('Plate', style: TextStyle(fontWeight: FontWeight.w600))),
+                SizedBox(width: 12),
+                SizedBox(width: 120, child: Text('Bar(s)', style: TextStyle(fontWeight: FontWeight.w600))),
+                SizedBox(width: 12),
+                SizedBox(width: 80, child: Text('Gap', style: TextStyle(fontWeight: FontWeight.w600))),
+                SizedBox(width: 12),
+                Expanded(child: Text('Exposure', style: TextStyle(fontWeight: FontWeight.w600))),
+              ],
+            ),
+            const Divider(),
+            ...rows,
+          ],
         ),
       ),
     );

@@ -6,39 +6,71 @@ import 'razor_repository.dart';
 class MemoryRazorRepository implements RazorRepository {
   final _controller = StreamController<List<Razor>>.broadcast();
   final List<Razor> _items = [
-    Razor(
-      id: 'r_rockwell_6s',
-      name: 'Rockwell 6S',
-      razorType: RazorType.safety,
-      brandId: 'brand_rockwell',
-      aliases: ['6S'],
-      specs: {'guard': 'SB', 'pieces': 3, 'adjustable': true, 'plates': 'R1–R6'},
-    ),
-    Razor(
-      id: 'r_dovo_bismarck',
-      name: 'Dovo Bismarck',
-      razorType: RazorType.straight,
-      brandId: 'brand_dovo',
-      aliases: ['Bismarck'],
-      specs: {'grind': 'full_hollow', 'width_in': '6/8', 'point': 'round', 'steel': 'carbon'},
-    ),
-    Razor(
-      id: 'r_feather_ac_ss',
-      name: 'Feather Artist Club SS',
-      razorType: RazorType.shavette,
-      brandId: 'brand_feather',
-      aliases: ['Feather SS', 'AC SS'],
-      specs: {'bladeFormat': 'AC', 'clamp': 'spring'},
-    ),
-    Razor(
-      id: 'r_iwasaki_kamisori',
-      name: 'Iwasaki Kamisori',
-      razorType: RazorType.kamisori,
-      brandId: 'brand_iwasaki',
-      aliases: ['Iwasaki'],
-      specs: {'steel': 'Swedish steel', 'handedness': 'right'},
-    ),
-  ];
+ Razor(
+    id: 'r_rockwell_6s',
+    name: 'Rockwell 6S',
+    razorType: RazorType.safety,
+    form: RazorForm.de,
+    brandId: 'brand_rockwell',
+    aliases: ['6S'],
+    specs: {
+      'mechanism': 'three_piece',
+      'adjustable': true,
+      'slant': false,
+      'tto': false,
+      // plate-specific specs live here
+      'plates': [
+       {'name': 'R1', 'barTypes': ['SB'], 'gap_mm': 0.20, 'exposure': 'mild'},
+       {'name': 'R2', 'barTypes': ['SB'], 'gap_mm': 0.35, 'exposure': 'mild'},
+        // (you can add R3–R6 later)
+      ],
+    },
+  ),
+  Razor(
+    id: 'r_dovo_bismarck',
+    name: 'Dovo Bismarck',
+    razorType: RazorType.straight,
+    form: RazorForm.straightFolding, // ⬅️ folding straight
+    brandId: 'brand_dovo',
+    aliases: ['Bismarck'],
+    specs: {'grind': 'full_hollow', 'width_in': '6/8', 'point': 'round', 'steel': 'carbon'},
+  ),
+  Razor(
+    id: 'r_feather_ac_ss',
+    name: 'Feather Artist Club SS',
+    razorType: RazorType.shavette,
+    form: RazorForm.shavetteFolding, // ⬅️ folding shavette
+    brandId: 'brand_feather',
+    aliases: ['Feather SS', 'AC SS'],
+    specs: {'bladeFormat': 'AC', 'clamp': 'spring'},
+  ),
+  Razor(
+    id: 'r_iwasaki_kamisori',
+    name: 'Iwasaki Kamisori',
+    razorType: RazorType.kamisori,
+    form: RazorForm.kamisoriTraditional, // ⬅️ asymmetric grind
+    brandId: 'brand_iwasaki',
+    aliases: ['Iwasaki'],
+    specs: {'steel': 'Swedish steel', 'handedness': 'right'},
+  ),
+Razor(
+    id: 'r_oneblade_core',
+    name: 'OneBlade Core',
+    razorType: RazorType.safety,
+    form: RazorForm.seFhs10,     // ⬅️ FHS-10 form
+    brandId: 'brand_oneblade',
+    aliases: ['Core'],
+    specs: {
+      'mechanism': 'one_piece',
+      'adjustable': false,
+      'slant': false,
+      'tto': false,
+      'bladeFormat': 'FHS-10',
+      'barTypes': ['SB'], // top-level for fixed guard 
+    },
+  ),
+];
+
 
   void _emit() => _controller.add(List.unmodifiable(_items));
   Razor? _findById(String id) {

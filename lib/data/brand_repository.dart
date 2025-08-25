@@ -14,6 +14,7 @@ class BrandRepository {
     Brand(id: 'b1', name: 'Alpha Shaving Works', country: 'UK'),
     Brand(id: 'b2', name: 'Paradigm', country: 'USA'),
     Brand(id: 'b3', name: 'Ascender Razors', country: 'USA'),
+    Brand(id: 'brand_oneblade', name: 'OneBlade', country: 'US'),
   ];
 
   List<Brand> all() => List.unmodifiable(_brands);
