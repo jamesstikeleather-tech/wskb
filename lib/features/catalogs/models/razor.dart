@@ -21,6 +21,7 @@ class Razor {
   final RazorType razorType;
   final RazorForm? form;
   final String? brandId;
+  final String? makerId;  
   final List<String> aliases;
   final Map<String, dynamic> specs;
 
@@ -30,6 +31,7 @@ class Razor {
     required this.razorType,
     this.form,
     this.brandId,
+    this.makerId,  
     this.aliases = const [],
     this.specs = const {},
   });
@@ -40,6 +42,7 @@ class Razor {
     RazorType? razorType,
     RazorForm? form,
     String? brandId,
+    String? makerId,  
     List<String>? aliases,
     Map<String, dynamic>? specs,
   }) {
@@ -49,6 +52,7 @@ class Razor {
       razorType: razorType ?? this.razorType,
       form: form ?? this.form,
       brandId: brandId ?? this.brandId,
+      makerId: makerId ?? this.makerId, 
       aliases: aliases ?? List<String>.from(this.aliases),
       specs: specs ?? Map<String, dynamic>.from(this.specs),
     );
@@ -60,6 +64,7 @@ class Razor {
     'razorType': razorType.name,
     'form': form?.name, // writes camelCase going forward
     'brandId': brandId,
+    'makerId': makerId,   
     'aliases': aliases,
     'specs': specs,
   };
@@ -75,6 +80,7 @@ class Razor {
       razorType: RazorType.values.byName(json['razorType'] as String),
       form: form,
       brandId: json['brandId'] as String?,
+      makerId: json['makerId'] as String?,
       aliases: (json['aliases'] as List?)?.cast<String>() ?? const [],
       specs: (json['specs'] as Map?)?.cast<String, dynamic>() ?? const {},
     );

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/env.dart';
@@ -8,37 +7,12 @@ import '../data/razor_repository.dart';
 import '../data/memory_razor_repository.dart';
 import '../data/firestore_razor_repository.dart';
 
-List<String> _splitCsvLine(String line) {
-  // Handles commas inside double quotes and doubled quotes ("")
-  final out = <String>[];
-  final buf = StringBuffer();
-  bool inQuotes = false;
-  for (int i = 0; i < line.length; i++) {
-    final ch = line[i];
-    if (ch == '"') {
-      if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
-        buf.write('"'); // escaped quote
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch == ',' && !inQuotes) {
-      out.add(buf.toString());
-      buf.clear();
-    } else {
-      buf.write(ch);
-    }
-  }
-  out.add(buf.toString());
-  // Trim and unquote outer quotes
-  return out.map((s) {
-    final t = s.trim();
-    return (t.startsWith('"') && t.endsWith('"') && t.length >= 2)
-        ? t.substring(1, t.length - 1)
-        : t;
-  }).toList();
-}
+// Maker support
+import '../data/maker_repository.dart';
+import '../data/memory_maker_repository.dart';
 
+// Brand name -> id mapping
+import '../../../data/brand_repository.dart';
 
 class RazorImportPage extends StatefulWidget {
   const RazorImportPage({super.key});
@@ -49,6 +23,8 @@ class RazorImportPage extends StatefulWidget {
 
 class _RazorImportPageState extends State<RazorImportPage> {
   late final RazorRepository repo;
+  late final MakerRepository makerRepo;
+
   final _csvCtrl = TextEditingController();
   List<_ParsedRow> _preview = const [];
   List<String> _errors = const [];
@@ -57,13 +33,14 @@ class _RazorImportPageState extends State<RazorImportPage> {
   void initState() {
     super.initState();
     repo = useFirestore ? FirestoreRazorRepository() : MemoryRazorRepository();
+    makerRepo = MemoryMakerRepository(); // Firestore impl later
 
-    // Example header to guide formatting (you can delete this placeholder later)
+    // Example CSV (you can clear this)
     _csvCtrl.text = [
-      'name,razorType,form,brandId,aliases,specs.grind,specs.width_in,specs_json',
-      'Dovo Bismarck,straight,straightFolding,brand_dovo,Bismarck,full_hollow,6/8,',
-      'Rockwell 6S,safety,de,brand_rockwell,6S,,,{"plates":[{"name":"R1","barTypes":["SB"],"gap_mm":0.20,"exposure":"mild"}]}',
-      'OneBlade Core,safety,seFhs10,brand_oneblade,Core,,,{"barTypes":["SB"],"bladeFormat":"FHS-10"}',
+      'name,razorType,form,brandId,brandName,aliases,specs.grind,specs.width_in,maker,specs_json',
+      'Dovo Bismarck,straight,straightFolding,,DOVO,Bismarck,full_hollow,6/8,DOVO,',
+      'Rockwell 6S,safety,de,,Rockwell Razors,6S,,,,{ "plates":[{"name":"R1","barTypes":["SB"],"gap_mm":0.20,"exposure":"mild"}] }',
+      'OneBlade Core,safety,seFhs10,,OneBlade,Core,,,,{ "barTypes":["SB"],"bladeFormat":"FHS-10" }',
     ].join('\n');
   }
 
@@ -109,7 +86,7 @@ class _RazorImportPageState extends State<RazorImportPage> {
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText:
-                            'name,razorType,form,brandId,aliases,specs.grind,specs.width_in,specs_json\n...',
+                            'name,razorType,form,brandId,brandName,aliases,specs.grind,specs.width_in,maker,specs_json\n...',
                       ),
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                     ),
@@ -163,6 +140,7 @@ class _RazorImportPageState extends State<RazorImportPage> {
                                   'type=${p.razor.razorType.name}',
                                   if (p.razor.form != null) 'form=${p.razor.form!.name}',
                                   if (p.razor.brandId != null) 'brand=${p.razor.brandId}',
+                                  if (p.makerName != null) 'maker=${p.makerName}',
                                   if (p.razor.aliases.isNotEmpty) 'aliases=${p.razor.aliases.length}',
                                   if (p.razor.specs.isNotEmpty) 'specs=${p.razor.specs.keys.length}',
                                 ].join(' • ')),
@@ -206,13 +184,14 @@ class _RazorImportPageState extends State<RazorImportPage> {
         continue;
       }
       try {
-        await repo.add(row.razor);
-        ok++;
-      } catch (e, st) {
-        if (kDebugMode) {
-          // ignore: avoid_print
-          print('Import error: $e\n$st');
+        Razor toSave = row.razor;
+        if (row.makerName != null) {
+          final makerId = await makerRepo.ensureByName(row.makerName!);
+          toSave = toSave.copyWith(makerId: makerId);
         }
+        await repo.add(toSave);
+        ok++;
+      } catch (_) {
         fail++;
       }
     }
@@ -223,11 +202,13 @@ class _RazorImportPageState extends State<RazorImportPage> {
   }
 }
 
-/// Parsed row holder
+/// ---------- parsing helpers ----------
+
 class _ParsedRow {
   final Razor razor;
   final String? error;
-  _ParsedRow(this.razor, this.error);
+  final String? makerName; // raw maker name from CSV (resolved in _doImport)
+  _ParsedRow(this.razor, this.error, {this.makerName});
 }
 
 class _ParseResult {
@@ -236,31 +217,49 @@ class _ParseResult {
   _ParseResult(this.rows, this.errors);
 }
 
-/// Very simple CSV parser:
-/// - Comma-separated
-/// - No embedded commas or quotes
-/// - `aliases` split by `;`
-/// - Any column starting with `specs.` becomes a nested `specs[key]`
-/// - Optional `specs_json` (raw JSON) is merged into `specs`
-/// Columns we expect at minimum: name, razorType
+List<String> _splitCsvLine(String line) {
+  // Handles commas inside double quotes and doubled quotes ("")
+  final out = <String>[];
+  final buf = StringBuffer();
+  bool inQuotes = false;
+  for (int i = 0; i < line.length; i++) {
+    final ch = line[i];
+    if (ch == '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+        buf.write('"'); // escaped quote
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch == ',' && !inQuotes) {
+      out.add(buf.toString());
+      buf.clear();
+    } else {
+      buf.write(ch);
+    }
+  }
+  out.add(buf.toString());
+  return out.map((s) {
+    final t = s.trim();
+    return (t.startsWith('"') && t.endsWith('"') && t.length >= 2)
+        ? t.substring(1, t.length - 1)
+        : t;
+  }).toList();
+}
 
 String _sanitizeJsonCandidate(String s) {
   var t = s.trim();
-
-  // Excel/Notion sometimes wrap JSON like ="{...}"
   if (t.startsWith('="{') && t.endsWith('}"')) {
     t = t.substring(2, t.length - 1);
   }
-
-  // Replace smart quotes with normal quotes
   t = t
-      .replaceAll('\u201C', '"') // left  “
-      .replaceAll('\u201D', '"') // right ”
-      .replaceAll('\u2018', "'") // left  ‘
-      .replaceAll('\u2019', "'"); // right ’
-
-  // If outer quotes remain, strip them
-  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+      .replaceAll('\u201C', '"')
+      .replaceAll('\u201D', '"')
+      .replaceAll('\u2018', "'")
+      .replaceAll('\u2019', "'");
+  if (t.length >= 2 &&
+      ((t.startsWith('"') && t.endsWith('"')) ||
+          (t.startsWith("'") && t.endsWith("'")))) {
     t = t.substring(1, t.length - 1);
   }
   return t;
@@ -268,17 +267,13 @@ String _sanitizeJsonCandidate(String s) {
 
 String _json5ishToJson(String s) {
   var t = s.trim();
-
-  // Convert single quotes to double quotes
   t = t.replaceAll("'", '"');
-
-  // Quote unquoted object keys:  { key: ... } or , key: ...
+  // "{ key: ... }" or ", key: ..."
   t = t.replaceAllMapped(
     RegExp(r'([{\[,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)'),
     (m) => '${m[1]}"${m[2]}"${m[3]}',
   );
-
-  // Quote bareword values after ':' (but keep true/false/null and numbers)
+  // values after ':'
   t = t.replaceAllMapped(
     RegExp(r'(:\s*)([A-Za-z_][A-Za-z0-9_\-\/]+)(\s*)(?=,|}|])'),
     (m) {
@@ -287,134 +282,12 @@ String _json5ishToJson(String s) {
       return '${m[1]}"$v"';
     },
   );
-
-  // Quote barewords inside arrays: [SB, OC] -> ["SB","OC"]
+  // values in arrays
   t = t.replaceAllMapped(
     RegExp(r'([\[,]\s*)([A-Za-z_][A-Za-z0-9_\-\/]+)(\s*)(?=,|\])'),
     (m) => '${m[1]}"${m[2]}"',
   );
-
   return t;
-}
-
-
-_ParseResult _parseCsv(String text) {
-  final errors = <String>[];
-  final rows = <_ParsedRow>[];
-
-  // Normalize newlines and trim
-  // Normalize newlines and trim
-final lines = const LineSplitter().convert(text.replaceAll('\r', '').trim());
-if (lines.isEmpty) return _ParseResult(rows, ['No lines found']);
-
-// Strip BOM if present
-final raw0 = lines.first.replaceFirst('\uFEFF', '');
-final headers = _splitCsvLine(raw0).map((h) => h.trim()).toList();
-final specsIdx = headers.indexOf('specs_json');
-
-Map<String, String> mapRow(List<String> cols) {
-  final m = <String, String>{};
-  for (var i = 0; i < headers.length; i++) {
-    m[headers[i]] = i < cols.length ? cols[i].trim() : '';
-  }
-  // If specs_json exists and the row had extra commas (unquoted JSON),
-  // join the remainder of the columns back into specs_json.
-  if (specsIdx != -1 && cols.length > specsIdx) {
-    final joined = cols.sublist(specsIdx).join(',');
-    m['specs_json'] = joined.trim();
-  }
-  return m;
-}
-
-for (var i = 1; i < lines.length; i++) {
-  final raw = lines[i].trim();
-  if (raw.isEmpty) continue;
-
-  final cols = _splitCsvLine(raw);  // 👈 robust split
-  final m = mapRow(cols);
-  // ... rest of your existing parsing stays the same
-
-
-    try {
-      final name = m['name'] ?? '';
-      final typeStr = (m['razorType'] ?? '').trim();
-      if (name.isEmpty || typeStr.isEmpty) {
-        throw 'Missing required "name" or "razorType"';
-      }
-
-      final rType = RazorType.values.byName(typeStr);
-
-      // Optional: form
-      RazorForm? form;
-      final formStr = (m['form'] ?? '').trim();
-      if (formStr.isNotEmpty) {
-        form = _parseFormCompat(formStr);
-      }
-
-      // Optional: brandId
-      final brandId = (m['brandId'] ?? '').isNotEmpty ? m['brandId'] : null;
-
-      // Aliases
-      final aliasesStr = (m['aliases'] ?? '').trim();
-      final aliases = aliasesStr.isEmpty
-          ? const <String>[]
-          : aliasesStr.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-
-      // Specs
-      final specs = <String, dynamic>{};
-
-      // Collect specs.* columns
-      for (final h in headers) {
-        if (h.startsWith('specs.') && (m[h]?.isNotEmpty ?? false)) {
-          final key = h.substring('specs.'.length);
-          final val = m[h]!;
-          // try to parse numbers/bools minimally
-          final parsed = _smart(val);
-          specs[key] = parsed;
-        }
-      }
-
-// Merge specs_json if present (accepts raw JSON or JSON-ish)
-final rawSpecsJson = (m['specs_json'] ?? '');
-final normalized = _sanitizeJsonCandidate(rawSpecsJson); // keep your existing sanitizer
-if (normalized.isNotEmpty) {
-  try {
-    final Map<String, dynamic> j = jsonDecode(normalized);
-    specs.addAll(j);
-  } catch (_) {
-    // Try JSON-ish -> JSON conversion
-    final converted = _json5ishToJson(normalized);
-    try {
-      final Map<String, dynamic> j2 = jsonDecode(converted);
-      specs.addAll(j2);
-    } catch (e) {
-      final preview = normalized.length > 60 ? '${normalized.substring(0, 60)}…' : normalized;
-      throw 'Invalid specs_json at line ${i + 1}: $e  |  value starts: $preview';
-    }
-  }
-}
-
-
-      // ID: slug + timestamp to avoid collisions
-      final id = '${_slug(name)}_${DateTime.now().microsecondsSinceEpoch}';
-
-      final razor = Razor(
-        id: id,
-        name: name,
-        razorType: rType,
-        form: form,
-        brandId: brandId,
-        aliases: aliases,
-        specs: specs,
-      );
-
-      rows.add(_ParsedRow(razor, null));
-    } catch (e) {
-      errors.add('Line ${i + 1}: $e');
-    }
-  }
-
-  return _ParseResult(rows, errors);
 }
 
 dynamic _smart(String s) {
@@ -427,11 +300,9 @@ dynamic _smart(String s) {
 }
 
 RazorForm _parseFormCompat(String raw) {
-  // try exact
   for (final v in RazorForm.values) {
     if (v.name == raw) return v;
   }
-  // snake_case -> lowerCamel
   final parts = raw.trim().split('_').where((p) => p.isNotEmpty).toList();
   if (parts.isEmpty) return RazorForm.other;
   final camel = [
@@ -452,3 +323,119 @@ String _slug(String s) {
       .replaceAll(RegExp(r'^_|_$'), '');
   return cleaned.isEmpty ? 'razor' : cleaned;
 }
+
+_ParseResult _parseCsv(String text) {
+  final errors = <String>[];
+  final rows = <_ParsedRow>[];
+
+  // Normalize newlines and trim
+  final lines = const LineSplitter().convert(text.replaceAll('\r', '').trim());
+  if (lines.isEmpty) return _ParseResult(rows, ['No lines found']);
+
+  // Headers
+  final raw0 = lines.first.replaceFirst('\uFEFF', '');
+  final headers = _splitCsvLine(raw0).map((h) => h.trim()).toList();
+  final specsIdx = headers.indexOf('specs_json');
+
+  Map<String, String> mapRow(List<String> cols) {
+    final m = <String, String>{};
+    for (var i = 0; i < headers.length; i++) {
+      m[headers[i]] = i < cols.length ? cols[i].trim() : '';
+    }
+    // If specs_json is present and unquoted JSON spilled past commas,
+    // join the remainder of the row back into specs_json.
+    if (specsIdx != -1 && cols.length > specsIdx) {
+      m['specs_json'] = cols.sublist(specsIdx).join(',').trim();
+    }
+    return m;
+  }
+
+  for (var i = 1; i < lines.length; i++) {
+    final raw = lines[i].trim();
+    if (raw.isEmpty) continue;
+
+    final cols = _splitCsvLine(raw);
+    final m = mapRow(cols);
+
+    try {
+      // Required
+      final name = m['name'] ?? '';
+      final typeStr = (m['razorType'] ?? '').trim();
+      if (name.isEmpty || typeStr.isEmpty) {
+        throw 'Missing required "name" or "razorType"';
+      }
+      final rType = RazorType.values.byName(typeStr); // expects lowercase (e.g., straight)
+
+      // Optional form
+      RazorForm? form;
+      final formStr = (m['form'] ?? '').trim();
+      if (formStr.isNotEmpty) form = _parseRazorFormCompat(formStr);
+
+      // brandId / brandID and/or brandName -> ensure (create if missing)
+      String? brandId;
+      final brandIdCsv = ((m['brandId'] ?? m['brandID']) ?? '').trim();
+      final brandNameCsv = (m['brandName'] ?? '').trim();
+      if (brandIdCsv.isNotEmpty || brandNameCsv.isNotEmpty) {
+        final derivedId = brandIdCsv.isNotEmpty ? brandIdCsv : 'brand_${_slug(brandNameCsv)}';
+        final nameForCreate = brandNameCsv.isNotEmpty ? brandNameCsv : derivedId;
+        brandId = BrandRepository().ensure(id: derivedId, name: nameForCreate);
+      }
+
+      // Maker (resolve id later in _doImport)
+      final makerName = (m['maker'] ?? '').trim();
+      final makerNameOpt = makerName.isEmpty ? null : makerName;
+
+      // Aliases (semicolon-separated)
+      final aliasesStr = (m['aliases'] ?? '').trim();
+      final aliases = aliasesStr.isEmpty
+          ? const <String>[]
+          : aliasesStr.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+      // Specs from columns specs.*
+      final specs = <String, dynamic>{};
+      for (final h in headers) {
+        if (h.startsWith('specs.') && (m[h]?.isNotEmpty ?? false)) {
+          final key = h.substring('specs.'.length);
+          final val = m[h]!;
+          specs[key] = _smart(val);
+        }
+      }
+
+      // specs_json (raw/quoted/json-ish)
+      final rawSpecsJson = (m['specs_json'] ?? '');
+      final normalized = _sanitizeJsonCandidate(rawSpecsJson);
+      if (normalized.isNotEmpty) {
+        try {
+          final Map<String, dynamic> j = jsonDecode(normalized);
+          specs.addAll(j);
+        } catch (_) {
+          final converted = _json5ishToJson(normalized);
+          final Map<String, dynamic> j2 = jsonDecode(converted);
+          specs.addAll(j2);
+        }
+      }
+
+      // ID
+      final id = '${_slug(name)}_${DateTime.now().microsecondsSinceEpoch}';
+
+      // Build row (makerId resolved later)
+      final razor = Razor(
+        id: id,
+        name: name,
+        razorType: rType,
+        form: form,
+        brandId: brandId,
+        makerId: null,
+        aliases: aliases,
+        specs: specs,
+      );
+
+      rows.add(_ParsedRow(razor, null, makerName: makerNameOpt));
+    } catch (e) {
+      errors.add('Line ${i + 1}: $e');
+    }
+  }
+
+  return _ParseResult(rows, errors);
+}
+
