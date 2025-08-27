@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../../../app/env.dart';
 import '../models/razor.dart';
 import '../data/razor_repository.dart';
@@ -36,6 +37,10 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final r = snapshot.data;
+// DEBUG
+debugPrint('Detail loaded: ${r?.name} with ${r?.images.length ?? 0} images');
+// DEBUG
+
           if (r == null) {
             return const Center(child: Text('Razor not found'));
           }
@@ -68,6 +73,25 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
                       .toList(),
                 ),
               ],
+
+// --- IMAGES: begin ---
+if (r.images.isNotEmpty) ...[
+  const SizedBox(height: 16),
+  SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: r.images.map((p) {
+        return Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: SizedBox(width: 260, child: _RazorImageThumb(p)),
+        );
+      }).toList(),
+    ),
+  ),
+],
+// --- IMAGES: end ---
+
+
               if (r.aliases.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text('Also known as', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -97,6 +121,53 @@ class _RazorDetailPageState extends State<RazorDetailPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+
+class _RazorImageThumb extends StatelessWidget {
+  final String path;
+  const _RazorImageThumb(this.path);
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = Theme.of(context).colorScheme.surfaceContainerHighest;
+
+    Widget placeholder(String label) => Container(
+          color: bg,
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        );
+
+    Widget child;
+    if (path.startsWith('asset:')) {
+      final p = 'assets/${path.substring(6)}';
+      child = Image.asset(
+        p,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => placeholder('Asset not found'),
+      );
+    } else if (path.startsWith('http')) {
+      child = Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => placeholder('Image failed to load'),
+      );
+    } else {
+      child = placeholder(path.isEmpty ? 'No preview' : path);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: child,
       ),
     );
   }
