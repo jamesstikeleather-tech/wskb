@@ -53,7 +53,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCMp1AVYKNysOyZWr5aAprNU86HvoKguAg',
+    apiKey: 'AIzaSyCJnypxFfwXjZw-EV7hFnZBvWqbxJ5lw2s',
     appId: '1:36703024646:web:89dba198f5e544c5257587',
     messagingSenderId: '36703024646',
     projectId: 'wet-shaving-knowledge-base',
