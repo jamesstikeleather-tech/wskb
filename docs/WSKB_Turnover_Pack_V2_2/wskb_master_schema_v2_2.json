@@ -1,0 +1,862 @@
+{
+  "version": "2.2.0",
+  "notes": [
+    "Adds Personal Process Inventory: per-user shave routines (templates) to prefill diary entries; includes per-pass settings and default products.",
+    "Diary now references an optional processTemplateId and stores a snapshot for historical integrity.",
+    "Max recommended templates per user: 12 (7 weekday slots + 5 specials), enforced at app level."
+  ],
+  "collections": {
+    "companies": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "country": "string|null",
+        "aliases": [
+          "string"
+        ],
+        "website": "string|null",
+        "notes": "string|null"
+      },
+      "indexes": [
+        "name_lc",
+        "country"
+      ]
+    },
+    "brands": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "companyId": "string|null",
+        "country": "string|null",
+        "aliases": [
+          "string"
+        ],
+        "logo": "string|null"
+      },
+      "indexes": [
+        "name_lc",
+        "companyId"
+      ]
+    },
+    "manufacturers": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "companyId": "string",
+        "name": "string",
+        "name_lc": "string",
+        "facilities": [
+          {
+            "country": "string|null",
+            "city": "string|null"
+          }
+        ],
+        "notes": "string|null"
+      },
+      "indexes": [
+        "companyId",
+        "name_lc"
+      ]
+    },
+    "artisans": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "brandIds": [
+          "string"
+        ],
+        "companyIds": [
+          "string"
+        ],
+        "website": "string|null",
+        "country": "string|null",
+        "aliases": [
+          "string"
+        ],
+        "bio": "string|null"
+      },
+      "indexes": [
+        "name_lc"
+      ]
+    },
+    "razors": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "razorType": "enum(de,seGem,seInjector,seAc,seFhs10,cartridgeMulti,straightFolding,straightFixed,kamisoriTraditional,shavetteFolding,shavetteFixed)",
+        "form": "enum(safetyDe,safetySe,cartridgeMulti,straightFolding,straightFixed,kamisoriTraditional,shavetteFolding,shavetteFixed)|null",
+        "brandId": "string|null",
+        "companyId": "string|null",
+        "manufacturerId": "string|null",
+        "artisanId": "string|null",
+        "images": [
+          "string"
+        ],
+        "aliases": [
+          "string"
+        ],
+        "specs": {
+          "adjustable": "bool|null",
+          "tto": "bool|null",
+          "slant": "bool|null",
+          "plates": [
+            {
+              "name": "string",
+              "gap_mm": "number|null",
+              "exposure": "string|number|null",
+              "barTypes": [
+                "enum(SB,OC,ScB,SB_OC,ScB_OC,SB_ScB,None)"
+              ]
+            }
+          ],
+          "grind": "string|null",
+          "width_in": "number|null",
+          "steel": "string|null",
+          "tip": "string|null",
+          "shoulder": "string|null",
+          "jimps": "string|null",
+          "shavetteBladeType": "enum(de,half_de,ac,injector,trim)|null"
+        }
+      },
+      "indexes": [
+        "name_lc",
+        "razorType",
+        "form",
+        "brandId",
+        "companyId",
+        "manufacturerId",
+        "artisanId"
+      ]
+    },
+    "blades": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "brandId": "string|null",
+        "brandName": "string|null",
+        "aliases": [
+          "string"
+        ],
+        "images": [
+          "string"
+        ],
+        "specs": {
+          "system": "enum(de,gem,injector,ac,fhs10,other)|null",
+          "coating": "string|null",
+          "country": "string|null",
+          "thickness_mm": "number|null",
+          "length_mm": "number|null",
+          "width_mm": "number|null",
+          "packaging": "string|null",
+          "bess_score": "number|null"
+        }
+      },
+      "indexes": [
+        "name_lc",
+        "brandId"
+      ]
+    },
+    "brushHandles": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "brandId": "string|null",
+        "companyId": "string|null",
+        "artisanId": "string|null",
+        "images": [
+          "string"
+        ],
+        "aliases": [
+          "string"
+        ],
+        "specs": {
+          "material": "string|null",
+          "finish": "string|null",
+          "bottomCoinOrEngraving": "bool|null"
+        }
+      },
+      "indexes": [
+        "name_lc",
+        "brandId",
+        "artisanId"
+      ]
+    },
+    "knots": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "type": "enum(badger,boar,synthetic,horse)",
+        "model": "string|null",
+        "diameter_mm": "number",
+        "loft_mm": "number|null",
+        "shape": "enum(bulb,fan,hybrid)",
+        "density": "string|number|null",
+        "backbone": "string|number|null",
+        "aliases": [
+          "string"
+        ],
+        "brandId": "string|null",
+        "companyId": "string|null",
+        "artisanId": "string|null"
+      },
+      "indexes": [
+        "type",
+        "diameter_mm"
+      ]
+    },
+    "brushes": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "handleId": "string|null",
+        "knotId": "string|null",
+        "images": [
+          "string"
+        ],
+        "aliases": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "name_lc",
+        "handleId",
+        "knotId"
+      ]
+    },
+    "software": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "type": "enum(soap,cream,aftershave,balm,preShave,alum,styptic,edp,edt,other)",
+        "brandId": "string|null",
+        "brandName": "string|null",
+        "images": [
+          "string"
+        ],
+        "aliases": [
+          "string"
+        ],
+        "specs": {
+          "version": "string|null",
+          "batch": "string|null",
+          "releasedOn": "string|null"
+        },
+        "formularyId": "string|null",
+        "scentNoteIds": [
+          "string"
+        ],
+        "ingredientIds": [
+          "string"
+        ],
+        "themeIds": [
+          "string"
+        ],
+        "moodIds": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "name_lc",
+        "brandId",
+        "formularyId"
+      ]
+    },
+    "fragrances": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "brandId": "string|null",
+        "brandName": "string|null",
+        "concentration": "enum(EDC,EDT,EDP,Parfum,Extrait,Other)",
+        "images": [
+          "string"
+        ],
+        "aliases": [
+          "string"
+        ],
+        "specs": {
+          "perfumer": "string|null",
+          "notes": [
+            "string"
+          ],
+          "version": "string|null"
+        },
+        "scentNoteIds": [
+          "string"
+        ],
+        "themeIds": [
+          "string"
+        ],
+        "moodIds": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "name_lc",
+        "brandId",
+        "concentration"
+      ]
+    },
+    "materials": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "category": "string|null",
+        "materialDescription": "string|null",
+        "manufacturingDescription": "string|null"
+      },
+      "indexes": [
+        "name_lc",
+        "category"
+      ]
+    },
+    "scents": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "aliases": [
+          "string"
+        ],
+        "family": "string|null",
+        "description": "string|null"
+      },
+      "indexes": [
+        "name_lc"
+      ]
+    },
+    "ingredients": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "aliases": [
+          "string"
+        ],
+        "isAllergen": "bool|null",
+        "notes": "string|null"
+      },
+      "indexes": [
+        "name_lc"
+      ]
+    },
+    "formularies": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "brandId": "string|null",
+        "version": "string|null",
+        "notes": "string|null"
+      },
+      "indexes": [
+        "name_lc",
+        "brandId"
+      ]
+    },
+    "themes": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "symbolism": "string|null",
+        "associatedSeason": [
+          "string"
+        ],
+        "associatedMoodIds": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "name_lc"
+      ]
+    },
+    "moods": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "name": "string",
+        "name_lc": "string",
+        "description": "string|null"
+      },
+      "indexes": [
+        "name_lc"
+      ]
+    },
+    "memosPersonal": {
+      "document": {
+        "id": "string",
+        "ownerUserId": "string",
+        "schemaVersion": "int",
+        "entityType": "enum(company,brand,manufacturer,artisan,razor,blade,brushHandle,knot,brush,software,fragrance,material,formulary,ingredient,scent,theme,mood)",
+        "payload": "object",
+        "createdAt": "string"
+      }
+    },
+    "inventory": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "ownerUserId": "string",
+        "entityType": "enum(razor,blade,brushHandle,knot,brush,software,fragrance)",
+        "catalogId": "string|null",
+        "personalMemoId": "string|null",
+        "serialNumber": "string|null",
+        "condition": "string|null",
+        "ownershipStatus": "enum(Want Seeking,Want Someday,On Order,In on Loan,Out on Loan,In Stock,Not Usable)|null",
+        "pricePaid": "number|null",
+        "purchaseDate": "string|null",
+        "storage": {
+          "locationId": "string|null",
+          "room": "string|null",
+          "cabinet": "string|null",
+          "shelf": "string|null",
+          "box": "string|null"
+        },
+        "personalNote": "string|null",
+        "images": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "ownerUserId",
+        "entityType",
+        "catalogId"
+      ]
+    },
+    "personalProcesses": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "ownerUserId": "string",
+        "name": "string",
+        "name_lc": "string",
+        "description": "string|null",
+        "tags": [
+          "string"
+        ],
+        "useCases": [
+          "string"
+        ],
+        "timeEstimate_min": "number|null",
+        "isActive": "bool",
+        "isFavorite": "bool",
+        "defaults": {
+          "prep": {
+            "shower": "bool|null",
+            "preShaveProductRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "notes": "string|null"
+          },
+          "lather": {
+            "style": "enum(bowl,face,hand)|null",
+            "brushPreferenceRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "waterAdjustment": "string|null"
+          },
+          "razorRef": {
+            "catalogId": "string|null",
+            "personalMemoId": "string|null"
+          },
+          "bladeRef": {
+            "catalogId": "string|null",
+            "personalMemoId": "string|null"
+          },
+          "software": {
+            "soapRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "aftershaveRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "fragranceRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            }
+          },
+          "post": {
+            "alum": "bool|null",
+            "rinseTemp": "enum(cold,cool,tepid,warm,hot)|null",
+            "tonerRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "balmRef": {
+              "catalogId": "string|null",
+              "personalMemoId": "string|null"
+            },
+            "notes": "string|null"
+          }
+        },
+        "passPlan": [
+          {
+            "order": "int",
+            "direction": "enum(WTG,XTG,ATG)",
+            "areas": "string|null",
+            "razorSetting": {
+              "plate": "string|null",
+              "adjustableSetting": "number|string|null"
+            },
+            "angleCue": "string|null",
+            "pressureCue": "string|null"
+          }
+        ],
+        "limits": {
+          "maxTemplates": "int"
+        }
+      },
+      "indexes": [
+        "ownerUserId",
+        "name_lc",
+        "isFavorite"
+      ]
+    },
+    "storageLocations": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "ownerUserId": "string",
+        "name": "string",
+        "name_lc": "string",
+        "hierarchy": {
+          "room": "string|null",
+          "cabinet": "string|null",
+          "shelf": "string|null",
+          "box": "string|null"
+        },
+        "notes": "string|null"
+      },
+      "indexes": [
+        "ownerUserId",
+        "name_lc"
+      ]
+    },
+    "userProfiles": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "ownerUserId": "string",
+        "environment": {
+          "waterHardness": "string|null",
+          "climate": "string|null"
+        },
+        "personal": {
+          "skinType": "string|null",
+          "beardType": "string|null",
+          "allergies": [
+            "string"
+          ]
+        },
+        "preferences": {
+          "bladeFeel": "string|null",
+          "coolingTolerance": "string|null",
+          "preferredThemes": [
+            "string"
+          ],
+          "preferredMoods": [
+            "string"
+          ]
+        }
+      },
+      "indexes": [
+        "ownerUserId"
+      ]
+    },
+    "diary": {
+      "document": {
+        "id": "string",
+        "schemaVersion": "int",
+        "ownerUserId": "string",
+        "date": "string",
+        "processTemplateId": "string|null",
+        "processSnapshot": "object|null",
+        "razorRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "bladeRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "brushRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "soapRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "aftershaveRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "fragranceRef": {
+          "catalogId": "string|null",
+          "personalMemoId": "string|null"
+        },
+        "rating": "number|null",
+        "outcomes": {
+          "weepers": "int|null",
+          "nicks": "int|null",
+          "irritation": "int|null"
+        },
+        "notes": "string|null",
+        "images": [
+          "string"
+        ],
+        "themeIds": [
+          "string"
+        ],
+        "moodIds": [
+          "string"
+        ]
+      },
+      "indexes": [
+        "ownerUserId",
+        "date"
+      ]
+    }
+  },
+  "csv_importers": {
+    "companies": [
+      "name",
+      "country",
+      "aliases",
+      "website",
+      "notes"
+    ],
+    "brands": [
+      "name",
+      "companyName",
+      "country",
+      "aliases",
+      "logo"
+    ],
+    "manufacturers": [
+      "companyName",
+      "name",
+      "facilities[0].country",
+      "facilities[0].city",
+      "notes"
+    ],
+    "artisans": [
+      "name",
+      "brandNames",
+      "companyNames",
+      "website",
+      "country",
+      "aliases",
+      "bio"
+    ],
+    "razors": [
+      "name",
+      "razorType",
+      "form",
+      "brandName",
+      "companyName",
+      "manufacturerName",
+      "artisanName",
+      "images",
+      "aliases",
+      "specs.adjustable",
+      "specs.tto",
+      "specs.slant",
+      "specs.grind",
+      "specs.width_in",
+      "specs.steel",
+      "specs.tip",
+      "specs.shoulder",
+      "specs.jimps",
+      "specs.shavetteBladeType",
+      "specs.plates[0].name",
+      "specs.plates[0].gap_mm",
+      "specs.plates[0].exposure",
+      "specs.plates[0].barTypes"
+    ],
+    "blades": [
+      "name",
+      "brandName",
+      "aliases",
+      "images",
+      "specs.system",
+      "specs.coating",
+      "specs.country",
+      "specs.thickness_mm",
+      "specs.length_mm",
+      "specs.width_mm",
+      "specs.packaging",
+      "specs.bess_score"
+    ],
+    "brushHandles": [
+      "name",
+      "brandName",
+      "companyName",
+      "artisanName",
+      "images",
+      "aliases",
+      "specs.material",
+      "specs.finish",
+      "specs.bottomCoinOrEngraving"
+    ],
+    "knots": [
+      "type",
+      "model",
+      "diameter_mm",
+      "loft_mm",
+      "shape",
+      "density",
+      "backbone",
+      "aliases",
+      "brandName",
+      "companyName",
+      "artisanName"
+    ],
+    "brushes": [
+      "name",
+      "handleName",
+      "knotModel",
+      "images",
+      "aliases"
+    ],
+    "software": [
+      "name",
+      "type",
+      "brandName",
+      "images",
+      "aliases",
+      "specs.version",
+      "specs.batch",
+      "specs.releasedOn",
+      "formularyName",
+      "scentNoteNames",
+      "ingredientNames",
+      "themeNames",
+      "moodNames"
+    ],
+    "fragrances": [
+      "name",
+      "brandName",
+      "concentration",
+      "images",
+      "aliases",
+      "specs.perfumer",
+      "specs.version",
+      "scentNoteNames",
+      "themeNames",
+      "moodNames"
+    ],
+    "materials": [
+      "name",
+      "category",
+      "materialDescription",
+      "manufacturingDescription"
+    ],
+    "scents": [
+      "name",
+      "aliases",
+      "family",
+      "description"
+    ],
+    "ingredients": [
+      "name",
+      "aliases",
+      "isAllergen",
+      "notes"
+    ],
+    "formularies": [
+      "name",
+      "brandName",
+      "version",
+      "notes"
+    ],
+    "themes": [
+      "name",
+      "symbolism",
+      "associatedSeason",
+      "associatedMoodNames"
+    ],
+    "moods": [
+      "name",
+      "description"
+    ],
+    "storageLocations": [
+      "name",
+      "hierarchy.room",
+      "hierarchy.cabinet",
+      "hierarchy.shelf",
+      "hierarchy.box",
+      "notes"
+    ],
+    "userProfiles": [
+      "environment.waterHardness",
+      "environment.climate",
+      "personal.skinType",
+      "personal.beardType",
+      "personal.allergies",
+      "preferences.bladeFeel",
+      "preferences.coolingTolerance",
+      "preferences.preferredThemes",
+      "preferences.preferredMoods"
+    ],
+    "personalProcesses": [
+      "name",
+      "description",
+      "tags",
+      "useCases",
+      "timeEstimate_min",
+      "isActive",
+      "isFavorite",
+      "defaults.prep.shower",
+      "defaults.prep.preShaveProduct",
+      "defaults.lather.style",
+      "defaults.lather.brushPreference",
+      "defaults.lather.waterAdjustment",
+      "defaults.razor",
+      "defaults.blade",
+      "defaults.software.soap",
+      "defaults.software.aftershave",
+      "defaults.software.fragrance",
+      "defaults.post.alum",
+      "defaults.post.rinseTemp",
+      "defaults.post.toner",
+      "defaults.post.balm",
+      "passPlan[0].order",
+      "passPlan[0].direction",
+      "passPlan[0].areas",
+      "passPlan[0].razorSetting.plate",
+      "passPlan[0].razorSetting.adjustableSetting",
+      "passPlan[0].angleCue",
+      "passPlan[0].pressureCue"
+    ]
+  }
+}
